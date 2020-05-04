@@ -1,0 +1,33 @@
+service:
+    name: change-object-author
+  
+  custom:
+    webpack:
+      webpackConfig: ./webpack.config.js
+      includeModules: true
+  
+  # Add the serverless-webpack plugin
+  plugins:
+    - serverless-webpack
+  
+  provider:
+    name: aws
+    runtime: nodejs10.x
+    apiGateway:
+      minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
+    environment:
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+  
+  vpc:
+    securityGroupIds:
+      - sg-08b4e0323206d11b7
+      - sg-0c554a0276d163b42
+    subnetIds:
+      - subnet-05c25db5a0333ce8a
+      - subnet-0e2b745404eb5a656
+  
+  functions:
+    outage-download-test:
+      handler: src/handler.changeObjectAuthorHandler
+      events:
+        - http: POST changeObjectAuthorHandler
