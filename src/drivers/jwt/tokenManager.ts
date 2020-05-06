@@ -47,7 +47,7 @@ export const handler = (event, context, callback) => {
     const user = decoded.user;
 
     // Checks if the user's scopes allow her to call the current function
-    const isAllowed = authorizeUser(user.scopes, event.methodArn);
+    const isAllowed = authorizeUser(user.accessGroups, event.methodArn);
 
     const effect = isAllowed ? 'Allow' : 'Deny';
     const userId = user.username;
