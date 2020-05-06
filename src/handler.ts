@@ -26,6 +26,7 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     const db = await MongoDB.getInstance();
 
     let fromObjects = await db.getAuthorLearningObjects(fromUserID, objectIDs);
+    let toObjects = await db.getAuthorLearningObjects(toUserID);
     let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthor = await db.getUserAccount(fromUserID);
     let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
@@ -34,6 +35,22 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     fromObjects.map(async learningObject => {
         const cuid = learningObject.cuid;
         await copyFiles(null, cuid, oldAuthorAccessID, newAuthorAccessID);
+    });
+
+    toObjects.map(async learningObject => {
+        let contributors = [];
+        for(let j=0; j < learningObject.contributors.length; j++) {
+            const author = await db.getUserAccount(learningObject.contributors[j]);
+            contributors.push(author);
+        }
+        if(learningObject.outcomes !== undefined) {
+            for(let p=0; p < learningObject.outcomes.length; p++) {
+                learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
+            }
+        } else {
+            learningObject.outcomes = [];
+        }
+        await insertSearchIndexItem({ ...learningObject, author: newAuthor });
     });
 };
 
@@ -88,4 +105,47 @@ async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) 
             });
         }
     });
+}
+
+async function insertSearchIndexItem(learningObject) {
+    try {
+        await client.index({
+            index: 'learning-objects',
+            type: '_doc',
+            body: formatLearningObjectSearchDocument(learningObject),
+        });
+    } catch (e) {
+        console.error(e.meta.body.error);
+    }
+}
+
+function formatLearningObjectSearchDocument(
+    learningObject,
+  ) {
+    const learningObjectSearchDocument = {
+      author: {
+        name: learningObject.author.name,
+        username: learningObject.author.username,
+        email: learningObject.author.email,
+        organization: learningObject.author.organization,
+      },
+      collection: learningObject.collection,
+      contributors: learningObject.contributors.map(c => ({
+        name: c.name,
+        username: c.username,
+        email: c.email,
+        organization: c.organization,
+      })),
+      date: learningObject.date,
+      description: learningObject.description,
+      cuid: learningObject.cuid,
+      id: learningObject._id,
+      length: learningObject.length,
+      levels: learningObject.levels,
+      name: learningObject.name,
+      outcomes: learningObject.outcomes,
+      version: learningObject.version,
+      status: learningObject.status,
+    };
+    return learningObjectSearchDocument;
 }
