@@ -73,4 +73,13 @@ export class MongoDB {
     async getFileAccessID(username: string) {
         return await this.onionDb.collection('file-access-ids').findOne({ username });
     }
+
+    /**
+     * Updates the learning object author in the database
+     * @param fromUserID the old author's id
+     * @param toUserID the new author's id
+     */
+    async updateLearningObjectAuthor(fromUserID, toUserID) {
+        await this.onionDb.collection('objects').updateMany({ authorID: fromUserID }, { $set: { authorID: toUserID }});
+    }
 }

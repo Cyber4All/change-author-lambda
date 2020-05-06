@@ -19,7 +19,12 @@ service:
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
   
   functions:
+    authorize:
+      handler: src/drivers/jwt/tokenManager.handler
     outage-download-test:
       handler: src/handler.changeObjectAuthorHandler
       events:
-        - http: POST changeObjectAuthorHandler
+        - http:
+          method: get
+          cors: true
+          authorizer: authorize

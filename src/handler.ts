@@ -1,5 +1,6 @@
 import { MongoDB } from "./drivers/database/mongodb";
 
+const request = require('request-promise');
 const { Client } = require('@elastic/elasticsearch');
 const AWS = require('aws-sdk');
 
@@ -19,9 +20,7 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     //      to:         ID of the person to transfer to
     //      objectIDs:  Array of object IDs to change
     // }
-    const fromUserID = '';
-    const toUserID = '';
-    const objectIDs = [];
+    const { fromUserID, toUserID, objectIDs } = JSON.parse(event.body);
 
     const db = await MongoDB.getInstance();
 
@@ -35,6 +34,13 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     fromObjects.map(async learningObject => {
         const cuid = learningObject.cuid;
         await copyFiles(null, cuid, oldAuthorAccessID, newAuthorAccessID);
+    });
+
+    await db.updateLearningObjectAuthor(fromUserID, toUserID);
+
+    fromObjects.map(async learningObject => {
+        const learningObjectID = learningObject._id;
+        await deleteSearchIndexItem(learningObjectID);
     });
 
     toObjects.map(async learningObject => {
@@ -52,6 +58,8 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
         }
         await insertSearchIndexItem({ ...learningObject, author: newAuthor });
     });
+
+    await updateLearningObjectReadMes(toObjects);
 };
 
 /**
@@ -107,6 +115,27 @@ async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) 
     });
 }
 
+async function deleteSearchIndexItem(learningObjectID) {
+    try {
+        await client.deleteByQuery({
+            index: 'learning-objects',
+            body: {
+                query: {
+                bool: {
+                    must: [
+                    {
+                        match: { id: learningObjectID },
+                    },
+                    ],
+                },
+                },
+            },
+        });
+    } catch (e) {
+        console.error(e.meta.body.error);
+    }
+}
+
 async function insertSearchIndexItem(learningObject) {
     try {
         await client.index({
@@ -148,4 +177,18 @@ function formatLearningObjectSearchDocument(
       status: learningObject.status,
     };
     return learningObjectSearchDocument;
+}
+
+async function updateLearningObjectReadMes(toObjects) {
+    toObjects.map(async learningObject => {
+        const learningObjectID = learningObject._id;
+        const options = {
+            uri: `${process.env.LEARNING_OBJECT_API}/learning-objects/${learningObjectID}/pdf`,
+            headers: {
+                Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVhOTU4MzQwMTQwNWNiMDUzMjcyY2VkMSIsInVzZXJuYW1lIjoibnZpc2FsMSIsIm5hbWUiOiJuaWNob2xhcyB2aXNhbGxpIiwiZW1haWwiOiJudmlzYWwxQHN0dWRlbnRzLnRvd3Nvbi5lZHUiLCJvcmdhbml6YXRpb24iOiJ0b3dzb24gdW5pdmVyc2l0eSIsImVtYWlsVmVyaWZpZWQiOnRydWUsImFjY2Vzc0dyb3VwcyI6WyJhZG1pbiIsIiJdLCJpYXQiOjE1NzYyNDk0NDgsImV4cCI6MTU3NjMzNTg0OCwiYXVkIjoibnZpc2FsMSIsImlzcyI6IlRISVNfSVNfQU5fSVNTVUVSIn0.22qf_be65nj1wq6lVD4KRTKiU2q4VvmSBWNk4fyKQbY',
+            },
+            method: 'PATCH',
+        };
+        await request(options);
+    });
 }
