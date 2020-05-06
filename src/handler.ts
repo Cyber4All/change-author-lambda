@@ -38,28 +38,9 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
 
     await db.updateLearningObjectAuthor(fromUserID, toUserID);
 
-    fromObjects.map(async learningObject => {
-        const learningObjectID = learningObject._id;
-        await deleteSearchIndexItem(learningObjectID);
-    });
+    updateSearchIndex(fromObjects, toObjects, newAuthor);
 
-    toObjects.map(async learningObject => {
-        let contributors = [];
-        for(let j=0; j < learningObject.contributors.length; j++) {
-            const author = await db.getUserAccount(learningObject.contributors[j]);
-            contributors.push(author);
-        }
-        if(learningObject.outcomes !== undefined) {
-            for(let p=0; p < learningObject.outcomes.length; p++) {
-                learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
-            }
-        } else {
-            learningObject.outcomes = [];
-        }
-        await insertSearchIndexItem({ ...learningObject, author: newAuthor });
-    });
-
-    await updateLearningObjectReadMes(toObjects);
+    updateLearningObjectReadMes(toObjects);
 };
 
 /**
@@ -87,6 +68,13 @@ function setupAWS() {
     return new AWS.S3();
 }
 
+/**
+ * Copies files in s3 to location of new author
+ * @param token token for multipart file uploads
+ * @param fromCuid the cuid of the object to move
+ * @param oldAuthorAccessID the file access id of the old author
+ * @param newAuthorAccessID the file access id of the new author
+ */
 async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) {
     const s3Options = { Bucket: process.env.BUCKET_NAME, Prefix: `${oldAuthorAccessID.fileAccessId}/${fromCuid}` };
     if(token) {
@@ -115,6 +103,42 @@ async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) 
     });
 }
 
+
+/**
+ * Updates the search index in elastic to reflect author change
+ * @param fromObjects objects that were changed
+ * @param toObjects objects that are being added to
+ * @param newAuthor the new author of the objects
+ */
+async function updateSearchIndex(fromObjects, toObjects, newAuthor) {
+    const db = await MongoDB.getInstance();
+
+    fromObjects.map(async learningObject => {
+        const learningObjectID = learningObject._id;
+        await deleteSearchIndexItem(learningObjectID);
+    });
+
+    toObjects.map(async learningObject => {
+        let contributors = [];
+        for(let j=0; j < learningObject.contributors.length; j++) {
+            const author = await db.getUserAccount(learningObject.contributors[j]);
+            contributors.push(author);
+        }
+        if(learningObject.outcomes !== undefined) {
+            for(let p=0; p < learningObject.outcomes.length; p++) {
+                learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
+            }
+        } else {
+            learningObject.outcomes = [];
+        }
+        await insertSearchIndexItem({ ...learningObject, author: newAuthor });
+    });
+}
+
+/**
+ * Deletes the search index of the object in elastic
+ * @param learningObjectID the object id to delete
+ */
 async function deleteSearchIndexItem(learningObjectID) {
     try {
         await client.deleteByQuery({
@@ -136,6 +160,10 @@ async function deleteSearchIndexItem(learningObjectID) {
     }
 }
 
+/**
+ * Inserts new search index of a learning object into elastic
+ * @param learningObject the object to add
+ */
 async function insertSearchIndexItem(learningObject) {
     try {
         await client.index({
@@ -148,6 +176,11 @@ async function insertSearchIndexItem(learningObject) {
     }
 }
 
+/**
+ * Formats the object search document to the standardizattion we use in
+ * elastic
+ * @param learningObject the object to standardize
+ */
 function formatLearningObjectSearchDocument(
     learningObject,
   ) {
@@ -179,6 +212,11 @@ function formatLearningObjectSearchDocument(
     return learningObjectSearchDocument;
 }
 
+/**
+ * Updates the learning object ReadMes to reflect the new author
+ * change
+ * @param toObjects The objects updated
+ */
 async function updateLearningObjectReadMes(toObjects) {
     toObjects.map(async learningObject => {
         const learningObjectID = learningObject._id;
@@ -189,6 +227,6 @@ async function updateLearningObjectReadMes(toObjects) {
             },
             method: 'PATCH',
         };
-        await request(options);
+        request(options);
     });
 }
