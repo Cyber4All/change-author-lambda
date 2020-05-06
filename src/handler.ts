@@ -41,6 +41,15 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     updateSearchIndex(fromObjects, toObjects, newAuthor);
 
     updateLearningObjectReadMes(toObjects, event.authorizationToken);
+
+    const response = {
+        statusCode: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*', // Required for CORS support to work
+        },
+    };
+    
+    callback(null, response);
 };
 
 /**
