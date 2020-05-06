@@ -40,7 +40,7 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
 
     updateSearchIndex(fromObjects, toObjects, newAuthor);
 
-    updateLearningObjectReadMes(toObjects);
+    updateLearningObjectReadMes(toObjects, event.authorizationToken);
 };
 
 /**
@@ -217,13 +217,13 @@ function formatLearningObjectSearchDocument(
  * change
  * @param toObjects The objects updated
  */
-async function updateLearningObjectReadMes(toObjects) {
+async function updateLearningObjectReadMes(toObjects, authToken) {
     toObjects.map(async learningObject => {
         const learningObjectID = learningObject._id;
         const options = {
             uri: `${process.env.LEARNING_OBJECT_API}/learning-objects/${learningObjectID}/pdf`,
             headers: {
-                Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVhOTU4MzQwMTQwNWNiMDUzMjcyY2VkMSIsInVzZXJuYW1lIjoibnZpc2FsMSIsIm5hbWUiOiJuaWNob2xhcyB2aXNhbGxpIiwiZW1haWwiOiJudmlzYWwxQHN0dWRlbnRzLnRvd3Nvbi5lZHUiLCJvcmdhbml6YXRpb24iOiJ0b3dzb24gdW5pdmVyc2l0eSIsImVtYWlsVmVyaWZpZWQiOnRydWUsImFjY2Vzc0dyb3VwcyI6WyJhZG1pbiIsIiJdLCJpYXQiOjE1NzYyNDk0NDgsImV4cCI6MTU3NjMzNTg0OCwiYXVkIjoibnZpc2FsMSIsImlzcyI6IlRISVNfSVNfQU5fSVNTVUVSIn0.22qf_be65nj1wq6lVD4KRTKiU2q4VvmSBWNk4fyKQbY',
+                Authorization: authToken,
             },
             method: 'PATCH',
         };
