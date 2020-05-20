@@ -1,3 +1,7 @@
 node_modules
 .env
 original-function.js
+.serverless
+.webpack
+test.js
+test.json

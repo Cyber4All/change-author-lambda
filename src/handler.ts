@@ -74,7 +74,11 @@ function setupAWS() {
     AWS.config.credentials = AWS_SDK_CONFIG.credentials;
     AWS.region = AWS_SDK_CONFIG.region;
     
-    return new AWS.S3();
+    if (process.env.MODE === 'dev') {
+        return new AWS.S3({ endpoint: `http://localhost:4566`, s3ForcePathStyle: true });
+    } else {
+        return new AWS.S3();
+    }
 }
 
 /**
@@ -99,8 +103,6 @@ async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) 
         else {
             allKeys.map(async key => {
                 if (!key.Key.includes(`${fromCuid}.zip`)) {
-                    console.log('OLD KEY: ', key.Key);
-                    console.log('NEW KEY: ', `${newAuthorAccessID.fileAccessId}${key.Key.replace(oldAuthorAccessID.fileAccessId, '')}`);
                     await s3.copyObject({
                         Bucket: process.env.BUCKET_NAME,
                         CopySource: `${process.env.BUCKET_NAME}/${key.Key}`,  // old file Key
