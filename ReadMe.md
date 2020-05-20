@@ -31,3 +31,9 @@ To run the function that was just deployed, type the following:
 ```
 $ sls invoke -f function-name --stage local --path path/to/data.json
 ```
+
+## General Debugging
+
+1. If the error in deploying the function is 'the bucket is not valid.' Then this is an issue with the service name in the serverless.yml file being too long.
+
+2. If you can start deployment but get a 500 error, AWS_NODEJS_CONNECTION_REUSE_ENABLED is being set in the serverless.yml file.  To fix, comment it out.
