@@ -1,11 +1,15 @@
+org: eolani1
+app: coa-app
 service:
   name: coa
   
 custom:
   localstack:
-    stages:
-      - local
-    host: http://localhost  # optional - LocalStack host to connect to
+    stages: [local]
+    autostart: true
+    lambda:
+      mountCode: true
+
   webpack:
     webpackConfig: ./webpack.config.js
     includeModules: true
@@ -13,7 +17,7 @@ custom:
 plugins:
   - serverless-webpack
   - serverless-localstack
-  
+  - serverless-plugin-simulate
 provider:
   name: aws
   runtime: nodejs12.x
@@ -28,6 +32,14 @@ functions:
   coa:
     handler: src/handler.changeObjectAuthorHandler
     events:
-      - http: post test
-        cors: true
-        authorizer: auth
+      - http:
+          path: src/handler.changeObjectAuthorHandler
+          method: post
+          cors: true
+          authorizer: auth
+          headers: 
+            - Content-Type
+            - x-Amz-Date
+            - Authorization
+            - X-Api-key
+            - X-Amz-Security-Token

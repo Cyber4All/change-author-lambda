@@ -1,6 +1,6 @@
-import { MongoDB } from "./drivers/database/mongodb";
+import { MongoDB } from './drivers/database/mongodb';
+import request from 'request-promise';
 
-const request = require('request-promise');
 const { Client } = require('@elastic/elasticsearch');
 const AWS = require('aws-sdk');
 
@@ -8,10 +8,12 @@ const AWS = require('aws-sdk');
 require('dotenv').config();
 
 let client, s3;
+let bucketName = 'clark-dev-file-uploads';
 
-//@ts-ignore
+
+// @ts-ignore
 export const changeObjectAuthorHandler = async (event, context, callback) => {
-    client = setupElasticsearch();
+    // client = setupElasticsearch();
     s3 = setupAWS();
 
     // event.body gets the body of the request
@@ -24,19 +26,24 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
 
     const db = await MongoDB.getInstance();
 
-    let fromObjects = await db.getAuthorLearningObjects(fromUserID, objectIDs);
-    let toObjects = await db.getAuthorLearningObjects(toUserID);
-    let newAuthor = await db.getUserAccount(toUserID);
+    let fromObjects = await db.getAuthorLearningObjects(fromUserID, objectIDs); // returns the learning object that needs to be moved
+    let toObjects = await db.getAuthorLearningObjects(toUserID); // returns the learning object for the specified user.
     let oldAuthor = await db.getUserAccount(fromUserID);
-    let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
+    let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
+    let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
 
+    const updatedObject = await db.updateLearningObjectAuthor(objectIDs, toUserID);
+    console.log(updatedObject);
+
+    // All Learning Object files need to be copied to a new directory
+    // Intentionally leave out bundles during copy so that new bundles
+    // are created on next download
     fromObjects.map(async learningObject => {
         const cuid = learningObject.cuid;
         await copyFiles(null, cuid, oldAuthorAccessID, newAuthorAccessID);
     });
 
-    await db.updateLearningObjectAuthor(fromUserID, toUserID);
 
     updateSearchIndex(fromObjects, toObjects, newAuthor);
 
@@ -44,11 +51,11 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
 
     const response = {
         statusCode: 200,
+        message: 'success',
         headers: {
           'Access-Control-Allow-Origin': '*', // Required for CORS support to work
         },
     };
-    
     callback(null, response);
 };
 
@@ -66,14 +73,14 @@ function setupAWS() {
     const AWS_SDK_CONFIG = {
         credentials: {
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
         },
-        region: process.env.AWS_REGION
+        region: process.env.AWS_REGION,
     };
-    
+
     AWS.config.credentials = AWS_SDK_CONFIG.credentials;
     AWS.region = AWS_SDK_CONFIG.region;
-    
+
     if (process.env.MODE === 'dev') {
         return new AWS.S3({ endpoint: `http://localhost:4566`, s3ForcePathStyle: true });
     } else {
@@ -89,23 +96,23 @@ function setupAWS() {
  * @param newAuthorAccessID the file access id of the new author
  */
 async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) {
-    const s3Options = { Bucket: process.env.BUCKET_NAME, Prefix: `${oldAuthorAccessID.fileAccessId}/${fromCuid}` };
-    if(token) {
+    const s3Options = { Bucket: bucketName, Prefix: `${oldAuthorAccessID.fileAccessId}/${fromCuid}` };
+    if (token) {
         s3Options['ContinuationToken'] = token;
     }
 
     let allKeys = [];
     s3.listObjectsV2(s3Options, function(err, data) {
         allKeys = allKeys.concat(data.Contents);
-    
-        if(data.IsTruncated)
+
+        if (data.IsTruncated)
             copyFiles(data.NextContinuationToken, fromCuid, oldAuthorAccessID, newAuthorAccessID);
         else {
             allKeys.map(async key => {
                 if (!key.Key.includes(`${fromCuid}.zip`)) {
                     await s3.copyObject({
-                        Bucket: process.env.BUCKET_NAME,
-                        CopySource: `${process.env.BUCKET_NAME}/${key.Key}`,  // old file Key
+                        Bucket: bucketName,
+                        CopySource: `${bucketName}/${key.Key}`,  // old file Key
                         Key: `${newAuthorAccessID.fileAccessId}${key.Key.replace(oldAuthorAccessID.fileAccessId, '')}`, // new file Key
                     }).promise();
                 }
@@ -131,12 +138,12 @@ async function updateSearchIndex(fromObjects, toObjects, newAuthor) {
 
     toObjects.map(async learningObject => {
         let contributors = [];
-        for(let j=0; j < learningObject.contributors.length; j++) {
+        for (let j = 0; j < learningObject.contributors.length; j++) {
             const author = await db.getUserAccount(learningObject.contributors[j]);
             contributors.push(author);
         }
-        if(learningObject.outcomes !== undefined) {
-            for(let p=0; p < learningObject.outcomes.length; p++) {
+        if (learningObject.outcomes !== undefined) {
+            for (let p = 0; p < learningObject.outcomes.length; p++) {
                 learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
             }
         } else {
