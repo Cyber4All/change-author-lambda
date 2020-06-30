@@ -1,4 +1,5 @@
 import * as jwt from 'jsonwebtoken';
+import jwt_decode from 'jwt-decode';
 import 'dotenv/config';
 
 /**
@@ -14,16 +15,6 @@ interface UserToken {
   accessGroups: string[];
 }
 
-// https://yos.io/2017/09/03/serverless-authentication-with-jwt/
-
-// function authorizeUser(accessGroups: string[], methodArn) {
-//   accessGroups.forEach(group => {
-//     if (group.includes('curator') || group === 'editor' || group === 'admin')
-//       return true;
-//   });
-//   return false;
-// }
-
 function buildIAMPolicy(userId, resource, context) {
   const policy = {
     principalId: userId,
@@ -31,19 +22,31 @@ function buildIAMPolicy(userId, resource, context) {
       Version: '2012-10-17',
       Statement: [
         {
-          Action: 'execute-api:Invoke',
+          Action: 'execute-api:Invoke, s3:*',
           Effect: 'Allow',
-          Resource: resource,
+          Resource: [resource,
+          '*'],
         },
       ],
     },
     context,
   };
-
   return policy;
 }
 
+export function generateServiceToken() {
+  const payload = {
+    SERVICE_KEY: process.env.SERVICE_KEY,
+  };
+  const options = {
+    issuer: process.env.ISSUER,
+    expiresIn: 86400,
+    audience: 'https://clark.center',
+  };
+  return jwt.sign(payload, process.env.KEY, options);
+}
 
+// https://yos.io/2017/09/03/serverless-authentication-with-jwt/
 function authorizeUser (user: UserToken, methodArn) {
   if (!user.accessGroups.includes('curator' || 'editor' || 'admin')) {
     return false;
@@ -51,17 +54,15 @@ function authorizeUser (user: UserToken, methodArn) {
   return true;
 }
 
+
 // @ts-ignore
 export const handler = (event: any, context: any, callback: any) => {
   const token = event.authorizationToken.substring(7);
-  const secretKey = 'THIS_IS_A_KEY';
-  console.log(token);
-
+  const secretKey = process.env.KEY;
   try {
     // Verify JWT
     const decoded = jwt.verify(token, secretKey) as UserToken;
     const user = decoded;
-    console.log(user);
 
     // Checks if the user's scopes allow her to call the current function
     const isAllowed = authorizeUser(user, event.methodArn);

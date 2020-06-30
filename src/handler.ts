@@ -1,5 +1,7 @@
 import { MongoDB } from './drivers/database/mongodb';
 import request from 'request-promise';
+import { generateServiceToken } from './drivers/jwt/tokenManager';
+import { Db, ObjectID } from 'mongodb';
 
 const { Client } = require('@elastic/elasticsearch');
 const AWS = require('aws-sdk');
@@ -8,33 +10,35 @@ const AWS = require('aws-sdk');
 require('dotenv').config();
 
 let client, s3;
-let bucketName = 'clark-dev-file-uploads';
+let bucketName = process.env.BUCKET_NAME;
 
 
 // @ts-ignore
 export const changeObjectAuthorHandler = async (event, context, callback) => {
-    // client = setupElasticsearch();
+    client = setupElasticsearch();
     s3 = setupAWS();
 
     // event.body gets the body of the request
     // body will be structured as such: {
     //      from:       ID of the person to transfer from
     //      to:         ID of the person to transfer to
-    //      objectIDs:  Array of object IDs to change
+    //      objectID:   ID of object ID to change
     // }
-    const { fromUserID, toUserID, objectIDs } = JSON.parse(event.body);
+
+    const { fromUserID, toUserID, objectID } = JSON.parse(event.body);
 
     const db = await MongoDB.getInstance();
 
-    let fromObjects = await db.getAuthorLearningObjects(fromUserID, objectIDs); // returns the learning object that needs to be moved
-    let toObjects = await db.getAuthorLearningObjects(toUserID); // returns the learning object for the specified user.
+    let fromObjects = await db.getAuthorLearningObjects(objectID); // returns the learning object that needs to be moved
     let oldAuthor = await db.getUserAccount(fromUserID);
     let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
     let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
 
-    const updatedObject = await db.updateLearningObjectAuthor(objectIDs, toUserID);
-    console.log(updatedObject);
+
+    await db.updateLearningObjectAuthor(objectID, toUserID); // change authorship
+    moveLearningObjectChildren(fromObjects, toUserID); // change authorship to new author if the parent object has children
+    updateSearchIndex(fromObjects, newAuthor);
 
     // All Learning Object files need to be copied to a new directory
     // Intentionally leave out bundles during copy so that new bundles
@@ -44,10 +48,7 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
         await copyFiles(null, cuid, oldAuthorAccessID, newAuthorAccessID);
     });
 
-
-    updateSearchIndex(fromObjects, toObjects, newAuthor);
-
-    updateLearningObjectReadMes(toObjects, event.authorizationToken);
+    updateLearningObjectReadMes(fromObjects);
 
     const response = {
         statusCode: 200,
@@ -95,6 +96,7 @@ function setupAWS() {
  * @param oldAuthorAccessID the file access id of the old author
  * @param newAuthorAccessID the file access id of the new author
  */
+
 async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) {
     const s3Options = { Bucket: bucketName, Prefix: `${oldAuthorAccessID.fileAccessId}/${fromCuid}` };
     if (token) {
@@ -103,17 +105,22 @@ async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) 
 
     let allKeys = [];
     s3.listObjectsV2(s3Options, function(err, data) {
+        if (err) {
+            console.log(err, err.stack); // logs if an error occurs
+        } else {
+            allKeys = allKeys.concat(data.Contents);
+        }
         allKeys = allKeys.concat(data.Contents);
-
         if (data.IsTruncated)
             copyFiles(data.NextContinuationToken, fromCuid, oldAuthorAccessID, newAuthorAccessID);
         else {
             allKeys.map(async key => {
+                console.log(allKeys);
                 if (!key.Key.includes(`${fromCuid}.zip`)) {
                     await s3.copyObject({
                         Bucket: bucketName,
                         CopySource: `${bucketName}/${key.Key}`,  // old file Key
-                        Key: `${newAuthorAccessID.fileAccessId}${key.Key.replace(oldAuthorAccessID.fileAccessId, '')}`, // new file Key
+                        Key: `${newAuthorAccessID.fileAccessId}${key.Key.replace(newAuthorAccessID.fileAccessId, '')}`, // new file Key
                     }).promise();
                 }
             });
@@ -121,36 +128,39 @@ async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) 
     });
 }
 
-
 /**
  * Updates the search index in elastic to reflect author change
  * @param fromObjects objects that were changed
  * @param toObjects objects that are being added to
  * @param newAuthor the new author of the objects
  */
-async function updateSearchIndex(fromObjects, toObjects, newAuthor) {
-    const db = await MongoDB.getInstance();
+async function updateSearchIndex(fromObjects, newAuthor) {
+    try {
+        const db = await MongoDB.getInstance();
 
-    fromObjects.map(async learningObject => {
-        const learningObjectID = learningObject._id;
-        await deleteSearchIndexItem(learningObjectID);
-    });
-
-    toObjects.map(async learningObject => {
-        let contributors = [];
-        for (let j = 0; j < learningObject.contributors.length; j++) {
-            const author = await db.getUserAccount(learningObject.contributors[j]);
-            contributors.push(author);
-        }
-        if (learningObject.outcomes !== undefined) {
-            for (let p = 0; p < learningObject.outcomes.length; p++) {
-                learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
+        fromObjects.map(async learningObject => {
+            const learningObjectID = learningObject._id;
+            await deleteSearchIndexItem(learningObjectID);
+        });
+        fromObjects.map(async learningObject => {
+            let contributors = [];
+            for (let j = 0; j < learningObject.contributors.length; j++) {
+                const author = await db.getUserAccount(learningObject.contributors[j]);
+                contributors.push(author);
             }
-        } else {
-            learningObject.outcomes = [];
-        }
-        await insertSearchIndexItem({ ...learningObject, author: newAuthor });
-    });
+            if (learningObject.outcomes !== undefined) {
+                for (let p = 0; p < learningObject.outcomes.length; p++) {
+                    learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
+                }
+            } else {
+                learningObject.outcomes = [];
+            }
+            await insertSearchIndexItem({ ...learningObject, author: newAuthor });
+        });
+    } catch (e) {
+        console.log(e);
+    }
+
 }
 
 /**
@@ -174,7 +184,7 @@ async function deleteSearchIndexItem(learningObjectID) {
             },
         });
     } catch (e) {
-        console.error(e.meta.body.error);
+        console.log(e);
     }
 }
 
@@ -190,7 +200,7 @@ async function insertSearchIndexItem(learningObject) {
             body: formatLearningObjectSearchDocument(learningObject),
         });
     } catch (e) {
-        console.error(e.meta.body.error);
+        console.log(e);
     }
 }
 
@@ -235,16 +245,37 @@ function formatLearningObjectSearchDocument(
  * change
  * @param toObjects The objects updated
  */
-async function updateLearningObjectReadMes(toObjects, authToken) {
-    toObjects.map(async learningObject => {
+async function updateLearningObjectReadMes(fromObjects) {
+    fromObjects.map(async learningObject => {
         const learningObjectID = learningObject._id;
         const options = {
             uri: `${process.env.LEARNING_OBJECT_API}/learning-objects/${learningObjectID}/pdf`,
             headers: {
-                Authorization: authToken,
+                Authorization: `Bearer ${generateServiceToken()}`,
             },
             method: 'PATCH',
         };
         request(options);
     });
+}
+
+async function moveLearningObjectChildren (fromObjects, newAuthorID) {
+    const db = await MongoDB.getInstance();
+    try {
+        fromObjects.map(async learningObject => {
+            if (learningObject.children) {
+                let children = [];
+                for (let i = 0; i < learningObject.children.length; i++) {
+                    const objects = await db.updateLearningObjectAuthor(learningObject.children[i], newAuthorID);
+                    children.push(objects);
+                    console.log(objects);
+                }
+            } else {
+                learningObject.children = [];
+            }
+        });
+
+    } catch (e) {
+        console.log(e);
+    }
 }

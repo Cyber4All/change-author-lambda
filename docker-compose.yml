@@ -8,6 +8,9 @@ services:
       - "4566-4599:4566-4599"
       - "${PORT_WEB_UI-8080}:${PORT_WEB_UI-8080}"
     environment:
+      - AWS_ACCESS_KEY_ID=foobar
+      - AWS_SECRET_ACCESS_KEY=foobar
+      - AWS_DEFAULT_ACCESS_KEY=foobar
       - SERVICES=${SERVICES- }
       - SERVICES=s3,ec2,lamda,apigateway
       - DEBUG=${DEBUG- }
@@ -18,8 +21,6 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - HOST_TMP_FOLDER=${TMPDIR}
       - AWS_DEFAULT_REGION=us-east-1
-      - ELASTIC_SEARCH_DOMAIN=http://localhost:9200
-      - CLARK_DB_URI=mongodb+srv://secinj:7800-York-Rd.@clarkdb-rktle.mongodb.net/onion?retryWrites=true&w=majority
       # - AWS_NODEJS_CONNECTION_REUSE_ENABLED="1"
     volumes:
       - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"

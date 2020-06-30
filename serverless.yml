@@ -2,29 +2,41 @@ org: eolani1
 app: coa-app
 service:
   name: coa
-  
-custom:
-  localstack:
-    stages: [local]
-    autostart: true
-    lambda:
-      mountCode: true
 
-  webpack:
-    webpackConfig: ./webpack.config.js
-    includeModules: true
+custom:
+  serverless-offline:
+    httpPort: 5001
+    region: us-east-1
+    stage: dev
+    iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account
+    - Effect: "Allow"
+      Action:
+        - "*"
+        # - "s3:PutObject"
+        # - "s3:GetObject"
+      Resource:
+        - arn:aws:s3:::*
+
+
   
 plugins:
   - serverless-webpack
-  - serverless-localstack
   - serverless-plugin-simulate
+  - serverless-offline
+
 provider:
   name: aws
   runtime: nodejs12.x
-  apiGateway:
-    minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
-  # environment:
-    # AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+  stage: dev
+  region: us-east-1
+  iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account
+  - Effect: "Allow"
+    Action:
+      - "*"
+      # - "s3:PutObject"
+      # - "s3:GetObject"
+    Resource:
+      - arn:aws:s3:::*
 
 functions:
   auth:
@@ -33,7 +45,7 @@ functions:
     handler: src/handler.changeObjectAuthorHandler
     events:
       - http:
-          path: src/handler.changeObjectAuthorHandler
+          path: /changeObjectAuthorHandler
           method: post
           cors: true
           authorizer: auth

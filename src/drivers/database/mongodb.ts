@@ -27,7 +27,8 @@ export class MongoDB {
      */
     private static async connect() {
         // tslint:disable-next-line:max-line-length
-        const mongodbClient = await new MongoClient('mongodb+srv://secinj:7800-York-Rd.@clarkdb-rktle.mongodb.net/onion?retryWrites=true&w=majority', { useNewUrlParser: true }).connect();
+        // const mongodbClient = await new MongoClient('mongodb+srv://secinj:7800-York-Rd.@clarkdb-rktle.mongodb.net/onion?retryWrites=true&w=majority', { useNewUrlParser: true }).connect();
+        const mongodbClient = await new MongoClient(process.env.CLARK_DB_URI, { useNewUrlParser: true }).connect();
         this.instance = new MongoDB();
         this.instance.setDatabase(mongodbClient);
     }
@@ -37,7 +38,7 @@ export class MongoDB {
      * @param mongodbClient The connection client to MongoDB
      */
     private setDatabase(mongodbClient: MongoClient) {
-        this.onionDb = mongodbClient.db();
+        this.onionDb = mongodbClient.db(ONION);
     }
 
     /**
@@ -49,16 +50,9 @@ export class MongoDB {
      * @param authorID ID of the 'from' author
      * @param objectIDs Array of object IDs to change authorship
      */
-    async getAuthorLearningObjects(authorID: string, objectIDs?: string[]) {
+    async getAuthorLearningObjects(objectID?: string) {
         // Build the author learning object query
-        let query = { };
-        if (objectIDs) {
-            query = {'$and': [{ authorID }, { _id: { '$in': objectIDs }}]};
-        } else {
-            query = { authorID };
-        }
-
-        return await this.onionDb.collection('objects').find(query).toArray();
+        return await this.onionDb.collection('objects').find({_id: objectID }).toArray();
     }
 
     /**
@@ -82,8 +76,8 @@ export class MongoDB {
      * @param fromUserID the old author's id
      * @param toUserID the new author's id
      */
-    async updateLearningObjectAuthor(objectIDs, toUserID) {
-        return await this.onionDb.collection('objects').findOneAndUpdate({_id: objectIDs[0]}, {$set: {authorID: toUserID}}, {upsert: true});
+    async updateLearningObjectAuthor(objectID, toUserID) {
+        return await this.onionDb.collection('objects').findOneAndUpdate({_id: objectID}, {$set: {authorID: toUserID}}, {upsert: true});
     }
 }
 

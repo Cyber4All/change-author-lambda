@@ -5,3 +5,4 @@ original-function.js
 .webpack
 test.js
 test.json
+.sls-simulate-registry
