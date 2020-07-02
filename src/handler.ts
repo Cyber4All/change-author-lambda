@@ -1,10 +1,9 @@
 import { MongoDB } from './drivers/database/mongodb';
 import request from 'request-promise';
 import { generateServiceToken } from './drivers/jwt/tokenManager';
-import { Db, ObjectID } from 'mongodb';
-
 const { Client } = require('@elastic/elasticsearch');
 const AWS = require('aws-sdk');
+const async = require('async');
 
 // Dotenv setup
 require('dotenv').config();
@@ -12,9 +11,9 @@ require('dotenv').config();
 let client, s3;
 let bucketName = process.env.BUCKET_NAME;
 
-
 // @ts-ignore
 export const changeObjectAuthorHandler = async (event, context, callback) => {
+    const db = await MongoDB.getInstance();
     client = setupElasticsearch();
     s3 = setupAWS();
 
@@ -26,18 +25,14 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     // }
 
     const { fromUserID, toUserID, objectID } = JSON.parse(event.body);
-
-    const db = await MongoDB.getInstance();
-
     let fromObjects = await db.getAuthorLearningObjects(objectID); // returns the learning object that needs to be moved
     let oldAuthor = await db.getUserAccount(fromUserID);
     let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
     let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
 
-
     await db.updateLearningObjectAuthor(objectID, toUserID); // change authorship
-    moveLearningObjectChildren(fromObjects, toUserID); // change authorship to new author if the parent object has children
+    moveLearningObjectChildren(fromObjects, toUserID, oldAuthorAccessID, newAuthorAccessID); // change authorship to new author if the parent object has children
     updateSearchIndex(fromObjects, newAuthor);
 
     // All Learning Object files need to be copied to a new directory
@@ -45,10 +40,9 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     // are created on next download
     fromObjects.map(async learningObject => {
         const cuid = learningObject.cuid;
-        await copyFiles(null, cuid, oldAuthorAccessID, newAuthorAccessID);
+        await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
     });
-
-    updateLearningObjectReadMes(fromObjects);
+    updateLearningObjectReadMe(fromObjects);
 
     const response = {
         statusCode: 200,
@@ -85,7 +79,7 @@ function setupAWS() {
     if (process.env.MODE === 'dev') {
         return new AWS.S3({ endpoint: `http://localhost:4566`, s3ForcePathStyle: true });
     } else {
-        return new AWS.S3();
+        return new AWS.S3({endpoint: 'http://s3.us-east-1.amazonaws.com', params: {Bucket: bucketName}, region: 'us-east-1'});
     }
 }
 
@@ -97,35 +91,42 @@ function setupAWS() {
  * @param newAuthorAccessID the file access id of the new author
  */
 
-async function copyFiles(token, fromCuid, oldAuthorAccessID, newAuthorAccessID) {
-    const s3Options = { Bucket: bucketName, Prefix: `${oldAuthorAccessID.fileAccessId}/${fromCuid}` };
-    if (token) {
-        s3Options['ContinuationToken'] = token;
+async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
+
+    const oldPrefix = `${oldAuthorAccessID.fileAccessId}/${fromCuid}`;
+    const newPrefix = `${newAuthorAccessID.fileAccessId}/${fromCuid}`;
+    try {
+        s3.listObjectsV2({Prefix: oldPrefix}, function (err, data) {
+            if (err) {
+                console.log(err, err.stack); // logs if an error occurs
+            } else {
+                console.log(data);
+            }
+            if (data.Contents.length) {
+                async.each(data.Contents, function(file, cb) {
+                    if (!file.Key.includes(`${fromCuid}.zip`) && !file.Key.includes(`.pdf`)) {
+                        console.log(file.Key);
+                        const params = {
+                            Bucket: bucketName,
+                            CopySource: bucketName + '/' + file.Key,
+                            Key: file.Key.replace(oldPrefix, newPrefix),
+                        };
+                        s3.copyObject(params, function(copyErr, copyData) {
+                            if (copyErr) {
+                                console.log (copyErr);
+                            } else {
+                                console.log (copyData);
+                            }
+                            cb();
+                        });
+                    }
+                });
+            }
+        });
+    } catch (err) {
+        console.log(err);
     }
 
-    let allKeys = [];
-    s3.listObjectsV2(s3Options, function(err, data) {
-        if (err) {
-            console.log(err, err.stack); // logs if an error occurs
-        } else {
-            allKeys = allKeys.concat(data.Contents);
-        }
-        allKeys = allKeys.concat(data.Contents);
-        if (data.IsTruncated)
-            copyFiles(data.NextContinuationToken, fromCuid, oldAuthorAccessID, newAuthorAccessID);
-        else {
-            allKeys.map(async key => {
-                console.log(allKeys);
-                if (!key.Key.includes(`${fromCuid}.zip`)) {
-                    await s3.copyObject({
-                        Bucket: bucketName,
-                        CopySource: `${bucketName}/${key.Key}`,  // old file Key
-                        Key: `${newAuthorAccessID.fileAccessId}${key.Key.replace(newAuthorAccessID.fileAccessId, '')}`, // new file Key
-                    }).promise();
-                }
-            });
-        }
-    });
 }
 
 /**
@@ -245,7 +246,7 @@ function formatLearningObjectSearchDocument(
  * change
  * @param toObjects The objects updated
  */
-async function updateLearningObjectReadMes(fromObjects) {
+async function updateLearningObjectReadMe(fromObjects: any) {
     fromObjects.map(async learningObject => {
         const learningObjectID = learningObject._id;
         const options = {
@@ -259,7 +260,12 @@ async function updateLearningObjectReadMes(fromObjects) {
     });
 }
 
-async function moveLearningObjectChildren (fromObjects, newAuthorID) {
+/**
+ * Change authorship of objects if it has children
+ * @param fromObjects objects that were changed
+ * @param newAuthorID id the new author
+ */
+async function moveLearningObjectChildren (fromObjects: any, newAuthorID: string, oldAuthorAccessID: string, newAuthorAccessID: string) {
     const db = await MongoDB.getInstance();
     try {
         fromObjects.map(async learningObject => {
@@ -267,14 +273,16 @@ async function moveLearningObjectChildren (fromObjects, newAuthorID) {
                 let children = [];
                 for (let i = 0; i < learningObject.children.length; i++) {
                     const objects = await db.updateLearningObjectAuthor(learningObject.children[i], newAuthorID);
-                    children.push(objects);
-                    console.log(objects);
+                    children.push(objects.value);
+                    children.map(async child => {
+                        const cuid = child.cuid;
+                        await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
+                    });
                 }
             } else {
                 learningObject.children = [];
             }
         });
-
     } catch (e) {
         console.log(e);
     }

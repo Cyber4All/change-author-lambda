@@ -8,7 +8,7 @@ custom:
     httpPort: 5001
     region: us-east-1
     stage: dev
-    iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account
+    iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account.
     - Effect: "Allow"
       Action:
         - "*"
@@ -29,7 +29,7 @@ provider:
   runtime: nodejs12.x
   stage: dev
   region: us-east-1
-  iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account
+  iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account.
   - Effect: "Allow"
     Action:
       - "*"

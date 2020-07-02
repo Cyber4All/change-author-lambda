@@ -1,4 +1,4 @@
-import { MongoClient, Db, ObjectID } from 'mongodb';
+import { MongoClient, Db } from 'mongodb';
 import 'dotenv/config';
 
 const ONION = 'onion';
@@ -27,7 +27,6 @@ export class MongoDB {
      */
     private static async connect() {
         // tslint:disable-next-line:max-line-length
-        // const mongodbClient = await new MongoClient('mongodb+srv://secinj:7800-York-Rd.@clarkdb-rktle.mongodb.net/onion?retryWrites=true&w=majority', { useNewUrlParser: true }).connect();
         const mongodbClient = await new MongoClient(process.env.CLARK_DB_URI, { useNewUrlParser: true }).connect();
         this.instance = new MongoDB();
         this.instance.setDatabase(mongodbClient);

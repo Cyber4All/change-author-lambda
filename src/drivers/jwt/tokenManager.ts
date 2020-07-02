@@ -34,6 +34,10 @@ function buildIAMPolicy(userId, resource, context) {
   return policy;
 }
 
+/**
+ * The identity of a user in the CLARK system that allows us to authorize requests.
+ * @interface
+ */
 export function generateServiceToken() {
   const payload = {
     SERVICE_KEY: process.env.SERVICE_KEY,
@@ -46,6 +50,10 @@ export function generateServiceToken() {
   return jwt.sign(payload, process.env.KEY, options);
 }
 
+/**
+ * The identity of a user in the CLARK system that grants access based on user's access group.
+ * @user
+ */
 // https://yos.io/2017/09/03/serverless-authentication-with-jwt/
 function authorizeUser (user: UserToken, methodArn) {
   if (!user.accessGroups.includes('curator' || 'editor' || 'admin')) {
