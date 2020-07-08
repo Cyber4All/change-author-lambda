@@ -25,24 +25,24 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     // }
 
     const { fromUserID, toUserID, objectID } = JSON.parse(event.body);
-    let fromObjects = await db.getAuthorLearningObjects(objectID); // returns the learning object that needs to be moved
+    let fromObject = await db.getAuthorLearningObjects(objectID); // returns the learning object that needs to be moved
     let oldAuthor = await db.getUserAccount(fromUserID);
     let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
     let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
 
-    await db.updateLearningObjectAuthor(objectID, toUserID); // change authorship
-    moveLearningObjectChildren(fromObjects, toUserID, oldAuthorAccessID, newAuthorAccessID); // change authorship to new author if the parent object has children
-    updateSearchIndex(fromObjects, newAuthor);
+    updateMongoDoc(objectID, toUserID, fromObject); // changes authorship and adds previous author to contributors
+    moveLearningObjectChildren(fromObject, toUserID, oldAuthorAccessID, newAuthorAccessID); // change authorship to new author if the parent object has children
+    updateSearchIndex(fromObject, newAuthor);
 
     // All Learning Object files need to be copied to a new directory
     // Intentionally leave out bundles during copy so that new bundles
     // are created on next download
-    fromObjects.map(async learningObject => {
+    fromObject.map(async learningObject => {
         const cuid = learningObject.cuid;
         await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
     });
-    updateLearningObjectReadMe(fromObjects);
+    updateLearningObjectReadMe(fromObject);
 
     const response = {
         statusCode: 200,
@@ -53,6 +53,21 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     };
     callback(null, response);
 };
+
+async function updateMongoDoc (objectID: string, toUserID: string, fromObject) {
+    try {
+        const db = await MongoDB.getInstance();
+        await db.updateLearningObjectAuthor(objectID, toUserID); // change authorship
+        fromObject.map(async learningObject => {
+            const authorID = learningObject.authorID;
+            if (learningObject.authorID) {
+                await db.addAuthorToContributor(objectID, authorID); // Adds previous author to contributor
+            }
+        });
+    } catch (e) {
+        throw new Error(e);
+    }
+}
 
 /**
  * Sets up the connection to the elastic search domain index
@@ -77,9 +92,9 @@ function setupAWS() {
     AWS.region = AWS_SDK_CONFIG.region;
 
     if (process.env.MODE === 'dev') {
-        return new AWS.S3({ endpoint: `http://localhost:4566`, s3ForcePathStyle: true });
+        return new AWS.S3({ endpoint: process.env.LOCALSTACK_ENDPOINT_S3, s3ForcePathStyle: true });
     } else {
-        return new AWS.S3({endpoint: 'http://s3.us-east-1.amazonaws.com', params: {Bucket: bucketName}, region: 'us-east-1'});
+        return new AWS.S3({endpoint: process.env.DEV_ENDPOINT_S3, params: {Bucket: bucketName}, region: 'us-east-1'});
     }
 }
 
@@ -105,7 +120,6 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
             if (data.Contents.length) {
                 async.each(data.Contents, function(file, cb) {
                     if (!file.Key.includes(`${fromCuid}.zip`) && !file.Key.includes(`.pdf`)) {
-                        console.log(file.Key);
                         const params = {
                             Bucket: bucketName,
                             CopySource: bucketName + '/' + file.Key,
@@ -124,9 +138,8 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
             }
         });
     } catch (err) {
-        console.log(err);
+        throw new Error(err);
     }
-
 }
 
 /**
@@ -135,15 +148,15 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
  * @param toObjects objects that are being added to
  * @param newAuthor the new author of the objects
  */
-async function updateSearchIndex(fromObjects, newAuthor) {
+async function updateSearchIndex(fromObject, newAuthor) {
     try {
         const db = await MongoDB.getInstance();
 
-        fromObjects.map(async learningObject => {
+        fromObject.map(async learningObject => {
             const learningObjectID = learningObject._id;
             await deleteSearchIndexItem(learningObjectID);
         });
-        fromObjects.map(async learningObject => {
+        fromObject.map(async learningObject => {
             let contributors = [];
             for (let j = 0; j < learningObject.contributors.length; j++) {
                 const author = await db.getUserAccount(learningObject.contributors[j]);
@@ -159,9 +172,8 @@ async function updateSearchIndex(fromObjects, newAuthor) {
             await insertSearchIndexItem({ ...learningObject, author: newAuthor });
         });
     } catch (e) {
-        console.log(e);
+        throw new Error(e);
     }
-
 }
 
 /**
@@ -185,7 +197,7 @@ async function deleteSearchIndexItem(learningObjectID) {
             },
         });
     } catch (e) {
-        console.log(e);
+        throw new Error(e);
     }
 }
 
@@ -201,7 +213,7 @@ async function insertSearchIndexItem(learningObject) {
             body: formatLearningObjectSearchDocument(learningObject),
         });
     } catch (e) {
-        console.log(e);
+        throw new Error(e);
     }
 }
 
@@ -246,8 +258,8 @@ function formatLearningObjectSearchDocument(
  * change
  * @param toObjects The objects updated
  */
-async function updateLearningObjectReadMe(fromObjects: any) {
-    fromObjects.map(async learningObject => {
+async function updateLearningObjectReadMe(fromObject: any) {
+    fromObject.map(async learningObject => {
         const learningObjectID = learningObject._id;
         const options = {
             uri: `${process.env.LEARNING_OBJECT_API}/learning-objects/${learningObjectID}/pdf`,
@@ -265,10 +277,10 @@ async function updateLearningObjectReadMe(fromObjects: any) {
  * @param fromObjects objects that were changed
  * @param newAuthorID id the new author
  */
-async function moveLearningObjectChildren (fromObjects: any, newAuthorID: string, oldAuthorAccessID: string, newAuthorAccessID: string) {
+async function moveLearningObjectChildren (fromObject: any, newAuthorID: string, oldAuthorAccessID: string, newAuthorAccessID: string) {
     const db = await MongoDB.getInstance();
     try {
-        fromObjects.map(async learningObject => {
+        fromObject.map(async learningObject => {
             if (learningObject.children) {
                 let children = [];
                 for (let i = 0; i < learningObject.children.length; i++) {
@@ -284,6 +296,6 @@ async function moveLearningObjectChildren (fromObjects: any, newAuthorID: string
             }
         });
     } catch (e) {
-        console.log(e);
+        throw new Error(e);
     }
 }

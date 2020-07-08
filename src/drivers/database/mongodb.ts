@@ -26,7 +26,6 @@ export class MongoDB {
      * @param dbURI String, The DB URI to connect to
      */
     private static async connect() {
-        // tslint:disable-next-line:max-line-length
         const mongodbClient = await new MongoClient(process.env.CLARK_DB_URI, { useNewUrlParser: true }).connect();
         this.instance = new MongoDB();
         this.instance.setDatabase(mongodbClient);
@@ -77,6 +76,10 @@ export class MongoDB {
      */
     async updateLearningObjectAuthor(objectID, toUserID) {
         return await this.onionDb.collection('objects').findOneAndUpdate({_id: objectID}, {$set: {authorID: toUserID}}, {upsert: true});
+    }
+
+    async addAuthorToContributor(objectID, authorID) {
+        return await this.onionDb.collection('objects').update({_id: objectID}, {$push: {contributors: authorID}}, {upsert: true});
     }
 }
 

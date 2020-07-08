@@ -8,16 +8,6 @@ custom:
     httpPort: 5001
     region: us-east-1
     stage: dev
-    iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account.
-    - Effect: "Allow"
-      Action:
-        - "*"
-        # - "s3:PutObject"
-        # - "s3:GetObject"
-      Resource:
-        - arn:aws:s3:::*
-
-
   
 plugins:
   - serverless-webpack
@@ -33,8 +23,6 @@ provider:
   - Effect: "Allow"
     Action:
       - "*"
-      # - "s3:PutObject"
-      # - "s3:GetObject"
     Resource:
       - arn:aws:s3:::*
 
