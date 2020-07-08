@@ -48,7 +48,7 @@ export class MongoDB {
      * @param authorID ID of the 'from' author
      * @param objectIDs Array of object IDs to change authorship
      */
-    async getAuthorLearningObjects(objectID?: string) {
+    async getLearningObject(objectID?: string) {
         // Build the author learning object query
         return await this.onionDb.collection('objects').find({_id: objectID }).toArray();
     }

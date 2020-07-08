@@ -43,3 +43,4 @@ functions:
             - Authorization
             - X-Api-key
             - X-Amz-Security-Token
+            

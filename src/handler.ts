@@ -25,7 +25,7 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     // }
 
     const { fromUserID, toUserID, objectID } = JSON.parse(event.body);
-    let fromObject = await db.getAuthorLearningObjects(objectID); // returns the learning object that needs to be moved
+    let fromObject = await db.getLearningObject(objectID); // returns the learning object that needs to be moved
     let oldAuthor = await db.getUserAccount(fromUserID);
     let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
