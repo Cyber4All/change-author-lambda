@@ -162,13 +162,19 @@ async function updateSearchIndex(fromObject, newAuthor) {
                 const author = await db.getUserAccount(learningObject.contributors[j]);
                 contributors.push(author);
             }
-            if (learningObject.outcomes !== undefined) {
-                for (let p = 0; p < learningObject.outcomes.length; p++) {
-                    learningObject.outcomes[p] = {...learningObject.outcomes[p], mappings: []};
+            const learningObjectOutcomes = await db.getOutcome(learningObject._id);
+            learningObjectOutcomes.map(async outcome => {
+                const mappings = outcome.mappings;
+                if (mappings.length) {
+                    let guildline = [];
+                    for (let i = 0; i < mappings.length; i++) {
+                        const payload = await db.getGuildlines(mappings[i]);
+                        guildline.push(payload);
+                    }
+                } else {
+                    outcome.mappings = [];
                 }
-            } else {
-                learningObject.outcomes = [];
-            }
+            });
             await insertSearchIndexItem({ ...learningObject, author: newAuthor });
         });
     } catch (e) {

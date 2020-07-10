@@ -2,12 +2,14 @@ import { MongoClient, Db } from 'mongodb';
 import 'dotenv/config';
 
 const ONION = 'onion';
+const OUTCOMES = 'outcomes';
 
 
 export class MongoDB {
     private static instance: MongoDB;
 
     private onionDb: Db;
+    private outcomeDb: Db;
 
     private constructor() {}
 
@@ -37,6 +39,7 @@ export class MongoDB {
      */
     private setDatabase(mongodbClient: MongoClient) {
         this.onionDb = mongodbClient.db(ONION);
+        this.outcomeDb = mongodbClient.db(OUTCOMES);
     }
 
     /**
@@ -81,5 +84,12 @@ export class MongoDB {
     async addAuthorToContributor(objectID, authorID) {
         return await this.onionDb.collection('objects').update({_id: objectID}, {$push: {contributors: authorID}}, {upsert: true});
     }
-}
 
+    async getOutcome(objectID) {
+        return await this.outcomeDb.collection('outcomes').find({learningObjectId: objectID}).toArray();
+    }
+
+    async getGuildlines(guildlineID) {
+        return await this.onionDb.collection('outcomes').findOne({_id: guildlineID});
+    }
+}
