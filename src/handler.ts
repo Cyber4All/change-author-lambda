@@ -224,7 +224,7 @@ async function insertSearchIndexItem(learningObject) {
 }
 
 /**
- * Formats the object search document to the standardizattion we use in
+ * Formats the object search document to the standardization we use in
  * elastic
  * @param learningObject the object to standardize
  */
