@@ -2,7 +2,7 @@ node_modules
 .env
 original-function.js
 .serverless
+.sls-simulate-registy
 .webpack
 test.js
 test.json
-.sls-simulate-registry

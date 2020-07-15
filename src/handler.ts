@@ -54,6 +54,8 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     callback(null, response);
 };
 
+// currently if the parent have children, they also get transfer to the new author. This dont not work the other way around
+// Therfore if a child's object is being transfered, its parent will not be moved but if it has children, they would be.
 async function updateMongoDoc (objectID: string, toUserID: string, fromObject) {
     try {
         const db = await MongoDB.getInstance();
