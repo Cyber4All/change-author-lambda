@@ -23,7 +23,11 @@
     "request": "^2.88.2",
     "request-promise": "^4.2.5",
     "serverless": "^1.73.1",
-    "slspress": "^2.2.5"
+    "slspress": "^2.2.5",
+    "@types/aws-lambda": "^8.10.17",
+    "@types/mongodb": "^3.3.9",
+    "@types/node": "^10.17.21",
+    "@types/request-promise": "^4.1.46"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.17",
