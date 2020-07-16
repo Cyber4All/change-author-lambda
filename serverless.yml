@@ -17,9 +17,11 @@ custom:
   
 plugins:
   - serverless-webpack
+  - serverless-plugin-typescript
   - serverless-plugin-simulate
   - serverless-offline
   # - serverless-localstack
+  - serverless-mocha-plugin
 
 provider:
   name: aws

@@ -1,0 +1,26 @@
+ name: Changes default object author to new author
+  endpoint: {function: changeObjectAuthorHandler}
+  request: 
+    headers: 
+      Authorization: "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVlYmM0YTQyZjEyZWFhMmM2ODg1M2M0OSIsInVzZXJuYW1lIjoiZG5zb2VzaWUxIiwibmFtZSI6ImRhdmlkIG5zb2VzaWUiLCJlbWFpbCI6InNvc2lqcjEyQGdtYWlsLmNvbSIsIm9yZ2FuaXphdGlvbiI6ImNsYXJrIiwiZW1haWxWZXJpZmllZCI6dHJ1ZSwiYWNjZXNzR3JvdXBzIjpbImFkbWluIl0sImlhdCI6MTU5Mzc4NDcxNSwiZXhwIjoxNTkzODcxMTE1LCJhdWQiOiJkbnNvZXNpZTEiLCJpc3MiOiJUSElTX0lTX0FOX0lTU1VFUiJ9.15e1BWo78-P87nB3vOK29e6_I4Q95ndOX97r0_2s5sU"
+    body: 
+      from: 5a9f0490a54db934142456d1
+      to: 5ebc4a42f12eaa2c68853c49
+      objectId: 5aa84718ecba9a264dcd80a1
+  response:
+    body: 
+      status: 200
+      message: success
+name: Changes new object author to default object author
+  endpoint: {function: changeObjectAuthorHandler}
+  request: 
+    headers: 
+      Authorization: "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVlYmM0YTQyZjEyZWFhMmM2ODg1M2M0OSIsInVzZXJuYW1lIjoiZG5zb2VzaWUxIiwibmFtZSI6ImRhdmlkIG5zb2VzaWUiLCJlbWFpbCI6InNvc2lqcjEyQGdtYWlsLmNvbSIsIm9yZ2FuaXphdGlvbiI6ImNsYXJrIiwiZW1haWxWZXJpZmllZCI6dHJ1ZSwiYWNjZXNzR3JvdXBzIjpbImFkbWluIl0sImlhdCI6MTU5Mzc4NDcxNSwiZXhwIjoxNTkzODcxMTE1LCJhdWQiOiJkbnNvZXNpZTEiLCJpc3MiOiJUSElTX0lTX0FOX0lTU1VFUiJ9.15e1BWo78-P87nB3vOK29e6_I4Q95ndOX97r0_2s5sU"
+    body: 
+      from: 5ebc4a42f12eaa2c68853c49
+      to: 5a9f0490a54db934142456d1
+      objectId: 5aa84718ecba9a264dcd80a1
+  response:
+    body: 
+      status: 200
+      message: success
