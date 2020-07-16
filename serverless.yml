@@ -4,19 +4,43 @@ service:
   name: coa
 
 custom:
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules: true
+    packager: 'npm'
+    excludeFiles: src/**/*.test.js
   serverless-offline:
     httpPort: 5001
     region: us-east-1
     stage: dev
+
   
 plugins:
   - serverless-webpack
   - serverless-plugin-simulate
   - serverless-offline
+  # - serverless-localstack
 
 provider:
   name: aws
   runtime: nodejs12.x
+  apiGateway:
+    minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
+  environment:
+    BUCKET_NAME: clark-dev-file-uploads
+    ELASTIC_SEARCH_DOMAIN: http://elasticsearch:9200
+    ACCKEY: AKIAS2VADYE3FHHA6I6A
+    SECKEY: 3RlxNRyfQcnc2tvG+qZ8j8gET6lkXlVk1J7/ZgCn
+    REG: us-east-1
+    LEARNING_OBJECT_API: http://localhost:5000
+    CLARK_DB_URI: mongodb://localhost:27017
+    CLARK_DB_ATLAS: mongodb+srv://secinj:7800-York-Rd.@clarkdb-rktle.mongodb.net/test
+    CLARK_DB_NAME: onion
+    KEY: THIS_IS_A_KEY
+    ISSUER: THIS_IS_AN_ISSUER
+    SERVICE_KEY: THIS_IS_A_SERVICE_KEY
+    LOCALSTACK_ENDPOINT_S3: http://localhost:4566
+    DEV_ENDPOINT_S3: http://s3.us-east-1.amazonaws.com
   stage: dev
   region: us-east-1
   iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account.
@@ -43,4 +67,3 @@ functions:
             - Authorization
             - X-Api-key
             - X-Amz-Security-Token
-            

@@ -71,25 +71,29 @@ export enum APIGatewayErrorMessage {
 
 // @ts-ignore
 export const handler = async (event: CustomAuthorizerEvent, context: any, callback: any): Promise<AuthResponse> => {
-  const secretKey = process.env.KEY;
-  if (!event.authorizationToken) {
-    // In case no token is provided
-    callback(new Error(APIGatewayErrorMessage.Unauthorized));
-  }
-  if (event.authorizationToken) {
-    const [key, val] = event.authorizationToken.split(' ');
-    if (key && key.toLowerCase() === 'bearer' && val) {
-      const user = jwt.verify(val, secretKey) as UserToken;
-      const isAllowed = authorizeUser(user);
-      const authorizerContext = { user: JSON.stringify(user) };
-      const userId = user.username;
-      if (isAllowed === true) {
-        // Return an IAM policy document for the current endpoint
-        const policyDocument = buildIAMPolicy(userId, event.methodArn, authorizerContext);
-        callback(null, policyDocument);
-      } else {
-        callback(new Error(APIGatewayErrorMessage.AccessDenied));
+  try {
+    const secretKey = process.env.KEY;
+    if (!event.authorizationToken) {
+      // In case no token is provided
+      callback(new Error(APIGatewayErrorMessage.Unauthorized));
+    }
+    if (event.authorizationToken) {
+      const [key, val] = event.authorizationToken.split(' ');
+      if (key && key.toLowerCase() === 'bearer' && val) {
+        const user = jwt.verify(val, secretKey) as UserToken;
+        const isAllowed = authorizeUser(user);
+        const authorizerContext = { user: JSON.stringify(user) };
+        const userId = user.username;
+        if (isAllowed === true) {
+          // Return an IAM policy document for the current endpoint
+          const policyDocument = buildIAMPolicy(userId, event.methodArn, authorizerContext);
+          callback(null, policyDocument);
+        } else {
+          callback(new Error(APIGatewayErrorMessage.AccessDenied));
+        }
       }
     }
+  } catch (e) {
+    callback(APIGatewayErrorMessage.Unauthorized);
   }
 };

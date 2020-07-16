@@ -30,28 +30,32 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
     let newAuthor = await db.getUserAccount(toUserID);
     let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
     let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
+    console.log(fromObject);
+    console.log(oldAuthor, newAuthor);
 
     updateMongoDoc(objectID, toUserID, fromObject); // changes authorship and adds previous author to contributors
     moveLearningObjectChildren(fromObject, toUserID, oldAuthorAccessID, newAuthorAccessID); // change authorship to new author if the parent object has children
-    updateSearchIndex(fromObject, newAuthor);
+    // updateSearchIndex(fromObject, newAuthor);
 
     // All Learning Object files need to be copied to a new directory
     // Intentionally leave out bundles during copy so that new bundles
     // are created on next download
-    fromObject.map(async learningObject => {
-        const cuid = learningObject.cuid;
-        await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
-    });
-    updateLearningObjectReadMe(fromObject);
+    // fromObject.map(async learningObject => {
+    //     const cuid = learningObject.cuid;
+    //     await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
+    // });
+    // updateLearningObjectReadMe(fromObject);
 
-    const response = {
+    return {
         statusCode: 200,
-        message: 'success',
+        body: JSON.stringify({
+            message: 'Go Serverless v1.0! Change of authorship successfully!',
+            input: event,
+        }),
         headers: {
           'Access-Control-Allow-Origin': '*', // Required for CORS support to work
         },
     };
-    callback(null, response);
 };
 
 // currently if the parent have children, they also get transfer to the new author. This dont not work the other way around
@@ -62,9 +66,12 @@ async function updateMongoDoc (objectID: string, toUserID: string, fromObject) {
         await db.updateLearningObjectAuthor(objectID, toUserID); // change authorship
         fromObject.map(async learningObject => {
             const authorID = learningObject.authorID;
-            if (learningObject.authorID) {
+            const contributors = [learningObject.contributors];
+            contributors.forEach(async value => {
+                if (!value.includes(authorID)) {
                 await db.addAuthorToContributor(objectID, authorID); // Adds previous author to contributor
-            }
+                }
+            });
         });
     } catch (e) {
         throw new Error(e);
@@ -84,10 +91,10 @@ function setupElasticsearch() {
 function setupAWS() {
     const AWS_SDK_CONFIG = {
         credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            accessKeyId: process.env.ACCKEY, // AWS_ACCESS_KEY
+            secretAccessKey: process.env.SECKEY, // AWS_SECRET_KEY
         },
-        region: process.env.AWS_REGION,
+        region: process.env.REG, // AWS_REGION
     };
 
     AWS.config.credentials = AWS_SDK_CONFIG.credentials;
@@ -127,6 +134,10 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
                             CopySource: bucketName + '/' + file.Key,
                             Key: file.Key.replace(oldPrefix, newPrefix),
                         };
+                        // const deleteParms = {
+                        //     Bucket: bucketName,
+                        //     Key: 'key',
+                        // };
                         s3.copyObject(params, function(copyErr, copyData) {
                             if (copyErr) {
                                 console.log (copyErr);
@@ -135,6 +146,7 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
                             }
                             cb();
                         });
+                        // s3.deleteObject(deleteParms);
                     }
                 });
             }
