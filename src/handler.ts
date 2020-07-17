@@ -147,7 +147,7 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
             }
             if (data.Contents.length) {
                 async.each(data.Contents, function(file, cb) {
-                    if (!file.Key.includes(`${fromCuid}.zip`)) {
+                    if (!file.Key.includes(`${fromCuid}.zip`) && !file.Key.includes('bundle.zip')) {
                         const params = {
                             Bucket: bucketName,
                             CopySource: bucketName + '/' + file.Key,
@@ -156,7 +156,6 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
                         s3.copyObject(params, function(copyErr, copyData) {
                             if (copyErr) {
                                 throw copyErr;
-                                // console.log (copyErr);
                             } else {
                                 console.log (copyData);
                             }
