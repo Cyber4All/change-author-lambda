@@ -28,8 +28,8 @@ export class MongoDB {
      * @param dbURI String, The DB URI to connect to
      */
     private static async connect() {
-        const mongodbClient = await new MongoClient(process.env.CLARK_DB_ATLAS, { useNewUrlParser: true }).connect();
-        // const mongodbClient = await new MongoClient(process.env.CLARK_DB_URI, { useNewUrlParser: true }).connect();
+        // const mongodbClient = await new MongoClient(process.env.CLARK_DB_ATLAS, { useNewUrlParser: true }).connect();
+        const mongodbClient = await new MongoClient(process.env.CLARK_DB_URI, { useNewUrlParser: true }).connect();
         this.instance = new MongoDB();
         this.instance.setDatabase(mongodbClient);
     }

@@ -14,9 +14,9 @@ describe('coa', () => {
 
   it('Change to new author', async () => {
     const body = { 
-      fromUserID: '5a9f0490a54db934142456d1',
-      toUserID: '5ebc4a42f12eaa2c68853c49',
-      objectID: '5aa84718ecba9a264dcd80a1',
+    fromUserID: '5a9f0490a54db934142456d1',
+    toUserID: '5ebc4a42f12eaa2c68853c49',
+    objectID: '5aa84718ecba9a264dcd80a1',
   }
 
   const jsonString = JSON.stringify(body);

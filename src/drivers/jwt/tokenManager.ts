@@ -73,6 +73,7 @@ export enum APIGatewayErrorMessage {
 export const handler = async (event: CustomAuthorizerEvent, context: any, callback: any): Promise<AuthResponse> => {
   try {
     const secretKey = process.env.KEY;
+    console.log(secretKey);
     if (!event.authorizationToken) {
       // In case no token is provided
       callback(new Error(APIGatewayErrorMessage.Unauthorized));
@@ -82,6 +83,7 @@ export const handler = async (event: CustomAuthorizerEvent, context: any, callba
       if (key && key.toLowerCase() === 'bearer' && val) {
         const user = jwt.verify(val, secretKey) as UserToken;
         const isAllowed = authorizeUser(user);
+        console.log('yeet', isAllowed);
         const authorizerContext = { user: JSON.stringify(user) };
         const userId = user.username;
         if (isAllowed === true) {
