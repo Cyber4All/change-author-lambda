@@ -26,7 +26,6 @@ provider:
   runtime: nodejs12.x
   apiGateway:
     minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
-
   stage: dev
   region: us-east-1
   iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account.

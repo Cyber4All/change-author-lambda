@@ -73,7 +73,6 @@ export enum APIGatewayErrorMessage {
 export const handler = async (event: CustomAuthorizerEvent, context: any, callback: any): Promise<AuthResponse> => {
   try {
     const secretKey = process.env.KEY;
-    console.log(secretKey);
     if (!event.authorizationToken) {
       // In case no token is provided
       callback(new Error(APIGatewayErrorMessage.Unauthorized));

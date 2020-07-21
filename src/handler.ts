@@ -1,11 +1,11 @@
+// Set up an alert. if it fails. (sentry, cloudwatch alarm).
+
 import { MongoDB } from './drivers/database/mongodb';
 import request from 'request-promise';
 import { generateServiceToken } from './drivers/jwt/tokenManager';
 const { Client } = require('@elastic/elasticsearch');
 const AWS = require('aws-sdk');
 const async = require('async');
-
-// Dotenv setup
 require('dotenv').config();
 
 let client, s3;
@@ -32,42 +32,41 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
         let oldAuthorAccessID = await db.getFileAccessID(oldAuthor.username);
         let newAuthorAccessID = await db.getFileAccessID(newAuthor.username);
 
-        handleauthorchange(objectID, toUserID, fromObject, oldAuthorAccessID, newAuthorAccessID, newAuthor);
+        handleAuthorChange(objectID, toUserID, fromObject, oldAuthorAccessID, newAuthorAccessID, newAuthor);
 
         const response = {
             statusCode: 200,
             body: JSON.stringify({
                 message: 'Go Serverless v1.0! Change of authorship successfully!',
-                // input: event,
             }),
         };
         callback(null, response);
-
     } catch (error) {
         callback (error);
     }
-
 };
 
-function handleauthorchange(objectID: any, toUserID: any, fromObject: any[], oldAuthorAccessID: any, newAuthorAccessID: any, newAuthor: any) {
+async function handleAuthorChange(objectID: any, toUserID: any, fromObject: any[], oldAuthorAccessID: any, newAuthorAccessID: any, newAuthor: any) {
     try {
         updateMongoDoc(objectID, toUserID, fromObject); // changes authorship and adds previous author to contributors
-        // updateSearchIndex(fromObject, newAuthor);
+        fromObject.map(async learningObject => {
+            if (learningObject.status === 'released') {
+                updateSearchIndex(fromObject, newAuthor);
+            }
+        });
         // All Learning Object files need to be copied to a new directory
         // Intentionally leave out bundles during copy so that new bundles
         // are created on next download
-        console.log(oldAuthorAccessID, newAuthorAccessID);
-        // updateLearningObjectReadMe(fromObject);
         fromObject.map(async (learningObject) => {
             const cuid = learningObject.cuid;
             await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
         });
-        // moveLearningObjectChildren(fromObject, toUserID, objectID, oldAuthorAccessID, newAuthorAccessID); // change authorship to new author if the parent object has children
-
+        await updateLearningObjectReadMe(fromObject);
+        // change authorship to new author if the parent object has children
+        await moveLearningObjectChildren(fromObject, toUserID, objectID, oldAuthorAccessID, newAuthorAccessID);
     } catch (err) {
         throw err;
     }
-
 }
 
 // currently if the parent have children, they also get transfer to the new author. This dont not work the other way around
@@ -83,7 +82,6 @@ async function updateMongoDoc (
         fromObject.map(async learningObject => {
             const authorID = learningObject.authorID;
             const contributors = [learningObject.contributors];
-
             if (contributors.length > 0 ) {
                 contributors.forEach(async value => {
                     if (!value.includes(authorID)) {
@@ -136,8 +134,8 @@ function setupAWS() {
  * @param newAuthorAccessID the file access id of the new author
  */
 
+ // Know what files failed. add visibility.
 async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
-
     const oldPrefix = `${oldAuthorAccessID.fileAccessId}/${fromCuid}`;
     const newPrefix = `${newAuthorAccessID.fileAccessId}/${fromCuid}`;
     try {
@@ -147,21 +145,33 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
             }
             if (data.Contents.length) {
                 async.each(data.Contents, function(file, cb) {
-                    if (!file.Key.includes(`${fromCuid}.zip`) && !file.Key.includes('bundle.zip')) {
-                        const params = {
+                    if (!file.Key.includes(`${fromCuid}.zip`)
+                    && !file.Key.includes('bundle.zip')
+                    && !file.Key.includes('0ReadMeFirst - ')) {
+                        const copyParams = {
                             Bucket: bucketName,
                             CopySource: bucketName + '/' + file.Key,
                             Key: file.Key.replace(oldPrefix, newPrefix),
                         };
-                        s3.copyObject(params, function(copyErr, copyData) {
-                            if (copyErr) {
-                                throw copyErr;
-                            } else {
+                        const deleteParms = {
+                            Bucket: bucketName,
+                            Key: file.Key,
+                        };
+                        s3.copyObject(copyParams, function(copyErr, copyData) {
+                            if (!copyErr) {
+                                s3.deleteObject(deleteParms, (e) => {
+                                    if (!e) {
+                                        console.log('File has been deleted successfully');
+                                    } else {
+                                        console.log(e);
+                                    }
+                                });
                                 console.log (copyData);
+                            } else {
+                                throw err;
                             }
                             cb();
                         });
-                        // s3.deleteObject(deleteParms);
                     }
                 });
             }
@@ -180,8 +190,6 @@ async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
 async function updateSearchIndex(fromObject, newAuthor) {
     try {
         const db = await MongoDB.getInstance();
-        console.log(newAuthor);
-
         fromObject.map(async learningObject => {
             const learningObjectID = learningObject._id;
             await deleteSearchIndexItem(learningObjectID);
@@ -326,14 +334,18 @@ async function moveLearningObjectChildren (fromObject: any, toUserID: string, ob
                 for (const childID of learningObject.children) {
                     const objects = await db.getLearningObject(childID);
                     updateMongoDoc(childID, toUserID, objects); // changes authorship and adds previous author to contributors
-                    updateSearchIndex(objects, toUserID);
-                    updateLearningObjectReadMe(objects);
+                    objects.map(async e => {
+                        if ( e.status === 'released') {
+                            await updateSearchIndex(objects, toUserID);
+                        }
+                    });
                     objects.map(async (value) => {
                         const cuid = value.cuid;
                         await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
                     });
+                    await updateLearningObjectReadMe(objects);
                     if (objects[0].children) {
-                        moveLearningObjectChildren(objects, toUserID, objects[0]._id, oldAuthorAccessID, newAuthorAccessID);
+                        await moveLearningObjectChildren(objects, toUserID, objects[0]._id, oldAuthorAccessID, newAuthorAccessID);
                     }
                 }
             }
