@@ -40,7 +40,7 @@ export const changeObjectAuthorHandler = async (event, context, callback) => {
                 message: 'Go Serverless v1.0! Change of authorship successfully!',
             }),
         };
-        callback(null, response);
+        return context.succeed(response);
     } catch (error) {
         callback (error);
     }
@@ -59,6 +59,7 @@ async function handleAuthorChange(objectID: any, toUserID: any, fromObject: any[
         // are created on next download
         fromObject.map(async (learningObject) => {
             const cuid = learningObject.cuid;
+            console.log(cuid);
             await copyFiles(cuid, oldAuthorAccessID, newAuthorAccessID);
         });
         await updateLearningObjectReadMe(fromObject);
@@ -138,10 +139,14 @@ function setupAWS() {
 async function copyFiles(fromCuid, oldAuthorAccessID, newAuthorAccessID) {
     const oldPrefix = `${oldAuthorAccessID.fileAccessId}/${fromCuid}`;
     const newPrefix = `${newAuthorAccessID.fileAccessId}/${fromCuid}`;
+    console.log(oldPrefix);
+
     try {
         s3.listObjectsV2({Prefix: oldPrefix}, function (err, data) {
             if (err) {
                 console.log(err, err.stack); // logs if an error occurs
+            } else {
+                console.log(data);
             }
             if (data.Contents.length) {
                 async.each(data.Contents, function(file, cb) {
@@ -355,5 +360,3 @@ async function moveLearningObjectChildren (fromObject: any, toUserID: string, ob
         throw err;
     }
 }
-
-

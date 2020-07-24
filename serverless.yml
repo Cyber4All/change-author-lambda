@@ -1,5 +1,5 @@
-org: eolani1
-app: coa-app
+org: secinj
+app: change_authorship
 service:
   name: coa
 
@@ -28,12 +28,6 @@ provider:
     minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
   stage: dev
   region: us-east-1
-  iamRoleStatements: # IAM role statements so that services can be accessed in the AWS account.
-  - Effect: "Allow"
-    Action:
-      - "*"
-    Resource:
-      - arn:aws:s3:::*
 
 functions:
   auth:

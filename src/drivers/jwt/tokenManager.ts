@@ -24,8 +24,7 @@ function buildIAMPolicy(userId, resource, context) {
         {
           Action: 'execute-api:Invoke',
           Effect: 'Allow',
-          Resource: [resource,
-          '*'],
+          Resource: [resource],
         },
       ],
     },
@@ -82,7 +81,6 @@ export const handler = async (event: CustomAuthorizerEvent, context: any, callba
       if (key && key.toLowerCase() === 'bearer' && val) {
         const user = jwt.verify(val, secretKey) as UserToken;
         const isAllowed = authorizeUser(user);
-        console.log('yeet', isAllowed);
         const authorizerContext = { user: JSON.stringify(user) };
         const userId = user.username;
         if (isAllowed === true) {
@@ -90,11 +88,11 @@ export const handler = async (event: CustomAuthorizerEvent, context: any, callba
           const policyDocument = buildIAMPolicy(userId, event.methodArn, authorizerContext);
           callback(null, policyDocument);
         } else {
-          callback(new Error(APIGatewayErrorMessage.AccessDenied));
+          return callback(new Error(APIGatewayErrorMessage.AccessDenied));
         }
       }
     }
-  } catch (e) {
-    callback(APIGatewayErrorMessage.Unauthorized);
+  } catch (err) {
+    throw err;
   }
 };
