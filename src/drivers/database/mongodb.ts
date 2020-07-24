@@ -1,11 +1,15 @@
 import { MongoClient, Db } from 'mongodb';
+import 'dotenv/config';
 
 const ONION = 'onion';
+const OUTCOMES = 'outcomes';
+
 
 export class MongoDB {
     private static instance: MongoDB;
 
     private onionDb: Db;
+    private outcomeDb: Db;
 
     private constructor() {}
 
@@ -14,7 +18,7 @@ export class MongoDB {
      */
     public static async getInstance() {
         if (!this.instance) {
-            await this.connect(process.env.CLARK_DB_URI);
+            await this.connect();
         }
         return this.instance;
     }
@@ -23,8 +27,8 @@ export class MongoDB {
      * Connects to the DB given a String URI
      * @param dbURI String, The DB URI to connect to
      */
-    private static async connect(dbURI: string) {
-        const mongodbClient = await new MongoClient(dbURI, { useNewUrlParser: true }).connect();
+    private static async connect() {
+        const mongodbClient = await new MongoClient(process.env.CLARK_DB_URI, { useNewUrlParser: true }).connect();
         this.instance = new MongoDB();
         this.instance.setDatabase(mongodbClient);
     }
@@ -35,27 +39,21 @@ export class MongoDB {
      */
     private setDatabase(mongodbClient: MongoClient) {
         this.onionDb = mongodbClient.db(ONION);
+        this.outcomeDb = mongodbClient.db(OUTCOMES);
     }
 
     /**
      * Gets the 'from' author's learning objects to change ownership
-     * 
+     *
      * If objectIDs is not present, all objects under the 'from' author
      * are returned
-     * 
+     *
      * @param authorID ID of the 'from' author
      * @param objectIDs Array of object IDs to change authorship
      */
-    async getAuthorLearningObjects(authorID: string, objectIDs?:string[]) {
+    async getLearningObject(objectID?: string) {
         // Build the author learning object query
-        let query = { };
-        if (objectIDs) {
-            query = {"$and": [{ authorID },{ _id: { "$in": objectIDs }}]};
-        } else {
-            query = { authorID };
-        }
-
-        return await this.onionDb.collection('objects').find(query).toArray();
+        return await this.onionDb.collection('objects').find({_id: objectID }).toArray();
     }
 
     /**
@@ -71,6 +69,27 @@ export class MongoDB {
      * @param username the username of the file access ID to fetch
      */
     async getFileAccessID(username: string) {
-        return await this.onionDb.collection('file-access-ids').findOne({ username });
+        return await this.onionDb.collection('file-access-ids').findOne({ username: username });
+    }
+
+    /**
+     * Updates the learning object author in the database
+     * @param fromUserID the old author's id
+     * @param toUserID the new author's id
+     */
+    async updateLearningObjectAuthor(objectID, toUserID) {
+        return await this.onionDb.collection('objects').findOneAndUpdate({_id: objectID}, {$set: {authorID: toUserID}}, {upsert: true});
+    }
+
+    async addAuthorToContributor(objectID, authorID) {
+        return await this.onionDb.collection('objects').updateOne({_id: objectID}, {$push: {contributors: authorID}}, {upsert: true});
+    }
+
+    async getOutcome(objectID) {
+        return await this.outcomeDb.collection('outcomes').find({learningObjectId: objectID}).toArray();
+    }
+
+    async getGuildlines(guildlineID) {
+        return await this.onionDb.collection('outcomes').findOne({_id: guildlineID});
     }
 }
